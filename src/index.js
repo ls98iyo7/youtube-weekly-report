@@ -11,10 +11,14 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 
 async function main() {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: 'credentials.json',
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
+    const credentials = JSON.parse(
+        process.env.GOOGLE_CREDENTIALS_JSON
+      );
+      
+      const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      });
 
   const client = await auth.getClient();
 
