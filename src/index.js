@@ -179,7 +179,7 @@ async function main() {
   if (!fs.existsSync('reports')) {
     fs.mkdirSync('reports');
   }
-  
+
   fs.writeFileSync('reports/report.html', html);
 
   const browser = await chromium.launch();
@@ -230,4 +230,14 @@ async function main() {
   console.log('スプレッドシートの内容を反映したレポート画像を作成しました');
 }
 
-main();
+main().catch(error => {
+    console.error('エラー詳細:');
+    console.error(error);
+  
+    if (error.response && error.response.data) {
+      console.error('レスポンスエラー:');
+      console.error(JSON.stringify(error.response.data, null, 2));
+    }
+  
+    process.exit(1);
+  });
