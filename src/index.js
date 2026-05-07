@@ -1,20 +1,23 @@
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
+
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 const axios = require('axios');
 const { google } = require('googleapis');
 const { chromium } = require('playwright');
 const fs = require('fs');
 
 async function main() {
-    const auth = new google.auth.GoogleAuth({
-        keyFile: 'credentials.json',
-        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-      });
+
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credentials.json',
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
 
   const client = await auth.getClient();
 
@@ -25,172 +28,296 @@ async function main() {
 
   const spreadsheetId = '1E5l7cXYe3dUnCPBCJF4t2qc3TvGn5GjZe3DG6bRxRtg';
 
-  const response = await sheets.spreadsheets.values.get({
+  // 動画一覧取得
+  const videoResponse = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: '動画管理!A1:Z100',
+    range: '動画管理!A1:C100',
   });
 
-  const rows = response.data.values || [];
+  // 次回MTG日・次回撮影日取得
+  const settingResponse = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId,
+    ranges: [
+      '基本設定!B2',
+      '集計!B7',
+    ],
+  });
+
+  const nextMeetingDate =
+    settingResponse.data.valueRanges[0].values?.[0]?.[0] || '未設定';
+
+  const nextShootDate =
+    settingResponse.data.valueRanges[1].values?.[0]?.[0] || '未設定';
+
+  const rows = videoResponse.data.values || [];
+
   const dataRows = rows.slice(1);
 
   const videos = dataRows.map(row => ({
     title: row[0] || '',
     status: row[1] || '',
     publishDate: row[2] || '',
-    memo: row[3] || '',
   }));
 
-  const countByStatus = status => {
-    return videos.filter(video => video.status === status).length;
-  };
+  const stockCount = videos.filter(
+    video => video.status !== '公開済'
+  ).length;
 
-  const stockCount = videos.filter(video => video.status !== '公開済').length;
+  if (!fs.existsSync('reports')) {
+    fs.mkdirSync('reports');
+  }
 
   const html = `
   <html>
     <head>
       <meta charset="UTF-8" />
+
       <style>
-        body {
-          font-family: sans-serif;
-          background: #f3f4f6;
-          padding: 40px;
+
+        *{
+          box-sizing:border-box;
         }
 
-        .report {
-          width: 1000px;
-          margin: auto;
-          background: white;
-          border-radius: 24px;
-          padding: 40px;
+        body{
+          margin:0;
+          padding:40px;
+          background:#f5f7fb;
+          font-family:
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+          color:#111827;
         }
 
-        h1 {
-          font-size: 34px;
-          margin-bottom: 8px;
+        .container{
+          width:1200px;
+          margin:auto;
         }
 
-        .date {
-          color: #666;
-          margin-bottom: 30px;
+        .header{
+          margin-bottom:32px;
         }
 
-        .cards {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 16px;
-          margin-bottom: 30px;
+        .title{
+          font-size:36px;
+          font-weight:700;
+          margin-bottom:8px;
         }
 
-        .card {
-          background: #f9fafb;
-          border-radius: 18px;
-          padding: 20px;
-          text-align: center;
+        .date{
+          color:#6b7280;
+          font-size:15px;
         }
 
-        .label {
-          font-size: 14px;
-          color: #666;
-          margin-bottom: 10px;
+        .cards{
+          display:grid;
+          grid-template-columns:repeat(3,1fr);
+          gap:20px;
+          margin-bottom:32px;
         }
 
-        .number {
-          font-size: 38px;
-          font-weight: bold;
+        .card{
+          background:white;
+          border-radius:24px;
+          padding:28px;
+          box-shadow:
+            0 4px 20px rgba(0,0,0,0.05);
         }
 
-        table {
-          width: 100%;
-          border-collapse: collapse;
+        .card-label{
+          font-size:15px;
+          color:#6b7280;
+          margin-bottom:12px;
         }
 
-        th, td {
-          border-bottom: 1px solid #e5e7eb;
-          padding: 14px;
-          text-align: left;
-          font-size: 14px;
+        .card-value{
+          font-size:42px;
+          font-weight:700;
+          line-height:1.2;
         }
 
-        th {
-          background: #f9fafb;
+        .table-wrap{
+          background:white;
+          border-radius:24px;
+          overflow:hidden;
+          box-shadow:
+            0 4px 20px rgba(0,0,0,0.05);
         }
+
+        table{
+          width:100%;
+          border-collapse:collapse;
+        }
+
+        th{
+          background:#f9fafb;
+          text-align:left;
+          padding:20px;
+          font-size:14px;
+          color:#6b7280;
+          border-bottom:1px solid #e5e7eb;
+        }
+
+        td{
+          padding:20px;
+          border-bottom:1px solid #f3f4f6;
+          font-size:15px;
+        }
+
+        tr:last-child td{
+          border-bottom:none;
+        }
+
+        .status{
+          display:inline-block;
+          padding:8px 14px;
+          border-radius:999px;
+          font-size:13px;
+          font-weight:600;
+        }
+
+        .status-企画中{
+          background:#ede9fe;
+          color:#6d28d9;
+        }
+
+        .status-撮影待ち{
+          background:#fef3c7;
+          color:#b45309;
+        }
+
+        .status-編集中{
+          background:#dbeafe;
+          color:#1d4ed8;
+        }
+
+        .status-監修中{
+          background:#fde2e2;
+          color:#b91c1c;
+        }
+
+        .status-公開待ち{
+          background:#dcfce7;
+          color:#15803d;
+        }
+
+        .status-公開済{
+          background:#f3f4f6;
+          color:#6b7280;
+        }
+
       </style>
     </head>
 
     <body>
-      <div class="report">
-        <h1>YouTube週次レポート</h1>
-        <div class="date">報告日：${new Date().toLocaleDateString('ja-JP')}</div>
 
-        <div class="cards">
-          <div class="card">
-            <div class="label">動画ストック</div>
-            <div class="number">${stockCount}</div>
+      <div class="container">
+
+        <div class="header">
+          <div class="title">
+            YouTube週次レポート
           </div>
 
-          <div class="card">
-            <div class="label">編集中</div>
-            <div class="number">${countByStatus('編集中')}</div>
-          </div>
-
-          <div class="card">
-            <div class="label">監修中</div>
-            <div class="number">${countByStatus('監修中')}</div>
-          </div>
-
-          <div class="card">
-            <div class="label">公開待ち</div>
-            <div class="number">${countByStatus('公開待ち')}</div>
-          </div>
-
-          <div class="card">
-            <div class="label">撮影待ち</div>
-            <div class="number">${countByStatus('撮影待ち')}</div>
+          <div class="date">
+            ${new Date().toLocaleDateString('ja-JP')}
           </div>
         </div>
 
-        <h2>動画一覧</h2>
+        <div class="cards">
 
-        <table>
-          <thead>
-            <tr>
-              <th>動画タイトル</th>
-              <th>ステータス</th>
-              <th>公開予定日</th>
-              <th>メモ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${videos.map(video => `
+          <div class="card">
+            <div class="card-label">
+              動画ストック本数
+            </div>
+
+            <div class="card-value">
+              ${stockCount}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">
+              次回MTG日
+            </div>
+
+            <div class="card-value">
+              ${nextMeetingDate}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-label">
+              次回撮影日
+            </div>
+
+            <div class="card-value">
+              ${nextShootDate}
+            </div>
+          </div>
+
+        </div>
+
+        <div class="table-wrap">
+
+          <table>
+
+            <thead>
               <tr>
-                <td>${video.title}</td>
-                <td>${video.status}</td>
-                <td>${video.publishDate}</td>
-                <td>${video.memo}</td>
+                <th>動画タイトル</th>
+                <th>ステータス</th>
+                <th>公開予定日</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+
+              ${videos.map(video => `
+                <tr>
+
+                  <td>
+                    ${video.title}
+                  </td>
+
+                  <td>
+                    <span class="status status-${video.status}">
+                      ${video.status}
+                    </span>
+                  </td>
+
+                  <td>
+                    ${video.publishDate}
+                  </td>
+
+                </tr>
+              `).join('')}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
       </div>
+
     </body>
   </html>
   `;
-  if (!fs.existsSync('reports')) {
-    fs.mkdirSync('reports');
-  }
 
   fs.writeFileSync('reports/report.html', html);
 
   const browser = await chromium.launch();
+
   const page = await browser.newPage({
     viewport: {
-      width: 1200,
-      height: 900,
+      width: 1400,
+      height: 1200,
     },
   });
 
-  await page.goto(`file://${process.cwd()}/reports/report.html`);
+  await page.goto(
+    `file://${process.cwd()}/reports/report.html`
+  );
 
   await page.screenshot({
     path: 'reports/report.png',
@@ -198,15 +325,16 @@ async function main() {
   });
 
   await browser.close();
+
   const uploadResult = await cloudinary.uploader.upload(
     'reports/report.png',
     {
       folder: 'youtube-weekly-report',
     }
   );
-  
+
   const imageUrl = uploadResult.secure_url;
-  
+
   await axios.post(
     'https://api.line.me/v2/bot/message/push',
     {
@@ -226,18 +354,18 @@ async function main() {
       },
     }
   );
-  
-  console.log('スプレッドシートの内容を反映したレポート画像を作成しました');
+
+  console.log('レポート送信完了');
 }
 
 main().catch(error => {
-    console.error('エラー詳細:');
-    console.error(error);
-  
-    if (error.response && error.response.data) {
-      console.error('レスポンスエラー:');
-      console.error(JSON.stringify(error.response.data, null, 2));
-    }
-  
-    process.exit(1);
-  });
+
+  console.error(error);
+
+  if (error.response?.data) {
+    console.error(
+      JSON.stringify(error.response.data, null, 2)
+    );
+  }
+
+});
