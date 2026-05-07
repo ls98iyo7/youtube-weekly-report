@@ -176,7 +176,10 @@ async function main() {
     </body>
   </html>
   `;
-
+  if (!fs.existsSync('reports')) {
+    fs.mkdirSync('reports');
+  }
+  
   fs.writeFileSync('reports/report.html', html);
 
   const browser = await chromium.launch();
