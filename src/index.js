@@ -11,12 +11,8 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 
 async function main() {
-    const credentials = JSON.parse(
-        process.env.GOOGLE_CREDENTIALS_JSON
-      );
-      
-      const auth = new google.auth.GoogleAuth({
-        credentials,
+    const auth = new google.auth.GoogleAuth({
+        keyFile: 'credentials.json',
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
       });
 
