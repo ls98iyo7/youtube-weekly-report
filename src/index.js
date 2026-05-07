@@ -59,8 +59,12 @@ async function main() {
     publishDate: row[2] || '',
   }));
 
-  const stockCount = videos.filter(
-    video => video.status !== '公開済'
+  const stockCount = videos.filter(video =>
+    [
+      '公開待ち',
+      '監修中',
+      '編集中'
+    ].includes(video.status)
   ).length;
 
   if (!fs.existsSync('reports')) {
@@ -169,6 +173,10 @@ async function main() {
           border-bottom:none;
         }
 
+        .published-row{
+          opacity:0.45;
+        }
+
         .status{
           display:inline-block;
           padding:8px 14px;
@@ -273,7 +281,7 @@ async function main() {
             <tbody>
 
               ${videos.map(video => `
-                <tr>
+                <tr class="${video.status === '公開済' ? 'published-row' : ''}">
 
                   <td>
                     ${video.title}
